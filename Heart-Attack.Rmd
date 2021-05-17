@@ -1,0 +1,1008 @@
+---
+title: '**Data Science: Capstone - Heart Failure prediction system**'
+author: "**Francesco Mariotti** - Harvard Data Science Professional Certificate Program"
+date: "05/20/2021 - Bologna, Italy"
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 4
+    number_sections: true
+    highlight: pygments
+    keep_tex: true
+---
+
+```{r, echo=FALSE, include=FALSE,}
+knitr::opts_chunk$set(error = TRUE, echo = TRUE, fig.align = 'center', cache = FALSE, cache.lazy = FALSE, message = FALSE, warning = FALSE, fig.pos = "h", error = FALSE)
+```
+
+```{r setup, include=FALSE, cache=FALSE}
+options(scipen = 1, digits = 4) #set to five decimal digit
+```
+
+```{r, include=FALSE, echo=FALSE}
+
+# STEP 1: MANAGING REQUIRED LIBRARIES
+# Loading all needed libraries... and may be some more. I always use these set of library to be sure ti have all the needed in my projects. Some Libraries may not be really needed.
+
+library(ggplot2)
+library(corrplot)
+library(dplyr)
+library(kableExtra)
+library(data.table)
+library(gridExtra)
+library(caret)
+library(lattice)
+library(randomForest)
+library(xgboost)
+library(DiagrammeR)
+library(tidyverse)
+library(tidyr)
+library(gbm)
+library(e1071)
+library(class)
+library(lightgbm)
+library(ROCR)
+library(PRROC)
+library(reshape2)
+library(parallel)
+library(parallelMap) 
+library(knitr)
+
+```
+\newpage
+
+# Executive Summary
+
+The word prediction in machine learning refers to the output of a trained model, representing the most likely value that will be obtained for a given input. Prediction in machine learning has a variety of applications, from chatbot development to recommendation systems. 
+
+The model is trained with historical data, and then predicts a selected property of the data for new inputs. 
+
+Prediction is used in lots of different areas, since it allows us to make highly accurate guesses about many things, such as predicting what the stock markets will do on any given day, predict results in sports, or even help the medical industry predict diseases. 
+
+The algorithms for prediction are classified as supervised learning algorithms since they need a training dataset with correct examples to learn from them. 
+
+The scope of this project is creating a machine learning based prediction system which can predict survival of patients with heart failure depending on some key parameters of their clinical picture.
+
+The Dataset used is obtained from Davide Chicco and Giuseppe Jurman. 
+
+In the first part of this report will be presented an exploratory analysis of the dataset including the data pre-processing needed for further analysis and for bulding the prediction system.
+
+The prediction systems builted on this dataset are evaluated and choosen based on accuracy of the model. Accuracy is one metric for evaluating classification models. Informally, accuracy is the fraction of predictions our model got right. 
+
+Formally, accuracy has the following definition:
+
+$$\mbox{Acc} = \frac{Number\ of\ correct\ predictions}{Total\ numbers\ of\ predictions}$$
+
+For accomplishing this goal, the **Tuned XGBoost model** is capable to reach an accuracy  of **0.87**, which is accettable.
+
+\newpage
+
+# Exploratory Data Analysis
+
+## Inital data Exploration
+
+### Background: 
+
+Cardiovascular diseases kill approximately 17 million people globally every year, and they mainly exhibit as myocardial infarctions and heart failures. Heart failure (HF) occurs when the heart cannot pump enough blood to meet the needs of the body. 
+
+Available electronic medical records of patients quantify symptoms, body features, and clinical laboratory test values, which can be used to perform biostatistics analysis aimed at highlighting patterns and correlations otherwise undetectable by medical doctors. 
+
+Machine learning, in particular, can predict patients' survival from their data and can individuate the most important features among those included in their medical records.
+
+### The dataset  
+
+The dataset is composed by 299 patients with heart failure collected in 2015. For every patient were collected key parameters of their clinical picture which are theoretically and realistically correlated with their status.
+
+```{r, include=FALSE, echo=FALSE}
+
+# STEP 2: DATA PRE-PROCESSING
+
+# I have dowloaded the dataset and stored it in the project folder. 
+# You will find the csv file between the uploaded files.
+
+### YOU HAVE TO CHANGE THE FOLLOWING LINE OF CODE WRITING THE FOLDER WHERE YOU HAVE PLACED THE CSV FILE###
+heartfailure.dat = read.csv("/Users/francescomariotti/Desktop/Harvard Data Science Capstone/Heart Attack/heart_failure_clinical_records_dataset.csv.xls",stringsAsFactors = FALSE)
+
+heartfailuretobedisplayed.dat = read.csv("/Users/francescomariotti/Desktop/Harvard Data Science Capstone/Heart Attack/heart_failure_clinical_records_dataset.csv.xls",stringsAsFactors = FALSE)
+
+factors = c("anaemia","diabetes","high_blood_pressure","sex","smoking","DEATH_EVENT")
+
+# Create the Dataframe for the Report
+colnames(heartfailuretobedisplayed.dat) <- c("Age", "Anaemia", "CPK", "Diabetes", "EF", "HBP", "P", "SC", "SS", "Sex", "Smoking", "Time", "Death Event")
+
+# Create the Dataframe
+heartfailure.dat[factors] = lapply(heartfailure.dat[factors],factor)
+
+```
+
+
+```{r, include=FALSE, echo=FALSE}
+
+# Preview of the dataframe
+head(heartfailure.dat) %>% knitr::kable() %>% kable_styling(full_width = TRUE, font_size = 6, position = "center", latex_options = "HOLD_position")
+
+```
+
+
+```{r, include=TRUE, echo=FALSE}
+
+# Preview of the dataframe
+head(heartfailuretobedisplayed.dat) %>% knitr::kable() %>% kable_styling(full_width = TRUE, font_size = 9, position = "center", latex_options = "HOLD_position")
+
+```
+
+The features/variables/columns in the datasets are the following:
+
+- Age ```<integer>``` that contains the age of each patient at the time of the heart failure.
+- Anaemia ```<factor>``` binary value which reveals the absence (0) or the presence (1) of Anaemia.
+- Creatinine PhosphoKinase - CPK ```<integer>``` that contains the level of the CPK enzyme in the blood (mcg/L)
+- Diabetes ```<factor>``` binary value which reveals the absence (0) or the presence (1) of Diabetes.
+- Ejection Fraction - EF```<numeric>``` that contains the title of each movie including the year of the release.
+- High Blood Presure  - HBP```<factor>``` binary value which reveals the absence (0) or the presence (1) of hypertension.
+- Platelets - P```<integer>``` that count the number of platelets.
+- Serum Creatinine - SC ```<integer>``` that contains the level of Serum Creatinine in the blood (mg/dL).
+- Serum Sodium - SS ```<integer>``` that contains level of Serum Sodium in the blood (mEq/L).
+- Sex ```<factor>``` binary value which reveals the sex. 0 if female, 1 if male
+- Smoking ```<factor>``` binary value which reveals the nicotine addiction. 0 if absent, 1 if present
+- Time ```<integer>``` that represents the follow up period (days)
+- Death Event ```<factor>``` binary value which reveals if the patient deceased during the follow-up period 1 or not 0;
+
+### Data Pre - Processing and Data Exploration
+
+The first steps of exploratory analysis are the preprocessing of the data that must be prepared to be used for effective understanding of the data.
+
+```{r, include=FALSE, echo=FALSE}
+
+# STEP 3: EXPLORATORY ANALYSIS
+
+```
+
+\newpage 
+
+First of all, for all continuous variables we define discrete intervals to have more easily interpretable data.
+
+#### Age trend  
+
+For instance, we could group patients by age range:
+
+
+```{r, include=TRUE, echo=TRUE}
+
+#Define useful variables for the data analysis
+agebreaks <- c(40,45,50,55,60,65,70,75,80,85,90,200)
+agelabels <- c("40-44","45-49","50-54","55-59","60-64","65-69",
+               "70-74","75-79","80-84","85-89","90+")
+
+
+#Set the data in order to have patients grouped by age intervals
+setDT(heartfailure.dat)[ ,agegroups := cut(age, 
+                                           breaks = agebreaks, 
+                                           right = FALSE, 
+                                           labels = agelabels)]
+```
+
+Now that we have grouped the patients by age intervals we can plot the percentage of patients deceased per age intervals and display the data.
+
+We immediately notice that: 
+
+
+- Majority of the patients are in their 50s (27.5%) and 60s (31.1%)
+- As the age of a patient increases, the probabilty of death event increases.
+
+```{r, include=FALSE, echo=FALSE}
+ageall = heartfailure.dat %>% group_by(agegroups) %>% count() %>% pull(n)
+ageall_percent = round(100*ageall/sum(ageall), 1)
+
+age1 = heartfailure.dat %>% filter(DEATH_EVENT==1) %>% group_by(agegroups) %>% count() %>% pull(n)
+age_percent = round(100*age1/sum(age1), 1)
+
+#Let's see what is the percent of patients deceased per age intervals
+age_stat = cbind(agelabels,ageall, age1, round(age1/ageall*100,1))
+colnames(age_stat) = c("Age Group", "No. of Patients", 
+                       "No. of Deceased Patients",
+                       "Percentage of patients who deceased (%)")
+```
+
+```{r, include=TRUE, echo=FALSE}
+#Let's display it
+age_stat %>% knitr::kable() %>% kable_styling(full_width = FALSE, position = "center", latex_options = "HOLD_position")
+
+#Let's plot the age distribution together with the death events.
+ggplot(heartfailure.dat, aes(x=age,fill=as.factor(DEATH_EVENT))) + 
+  geom_histogram(binwidth = 5, position = "identity",alpha = 0.5,color = "white") + 
+  xlab("Age") + ylab("Number of subjects") + theme_classic() + 
+  labs(caption = "Age Distribution with Death Event")
+```
+
+As seen before it is straightforward to group the data into intervals to have a better understanding and a clearer view on the distribution of patients in relation to the variables analyzed. 
+
+All the continuous variables have been grouped in discrete intervals as done before with the age. The results are presented below.
+
+```{r, include=FALSE, echo=FALSE}
+#As previously done with the age let's set the Creatine Phosphokinase intervals
+cpbreaks <- c(0,500,1000,1500,2000,2500,3000,3500,4000,4500,5000,5500,80000)
+cplabels <- c("<500","500-999","1001-1499","1500-1999","2000-2499","2500-2999","3000-3499","3500-3999",
+              "4000-4499","4500-4999","5000-5499","5500+")
+
+setDT(heartfailure.dat)[ ,cpgroups := cut(creatinine_phosphokinase, 
+                                          breaks = cpbreaks, 
+                                          right = FALSE, 
+                                          labels = cplabels)]
+
+cp_all = heartfailure.dat %>% group_by(cpgroups) %>% count()
+cp_1 = heartfailure.dat %>% filter(DEATH_EVENT==1) %>% group_by(cpgroups) %>% count() 
+cp_stat = full_join(cp_all,cp_1,by="cpgroups")
+cp_stat[which(is.na(cp_stat[,3])),3] = 0
+
+cp_percent = round(cp_stat$n.y/ cp_stat$n.x*100,1)
+
+cp_stat = cbind(as.data.frame(cp_stat), cp_percent)
+
+names(cp_stat) = c("CP Range", "No. of Patients", 
+                   "No. of Deceased Patients",
+                   "Percentage of patients who deceased (%)")
+```
+
+\newpage 
+
+#### Creatinine Phosphokinase trend  
+
+Creatine phosphokinase (a.k.a., creatine kinase, CPK, or CK) is an enzyme (a protein that helps to elicit chemical changes in your body) found in your heart, brain, and skeletal muscles. When muscle tissue is damaged, CPK leaks into your blood. Therefore, high levels of CPK usually indicate some sort of stress or injury to your heart or other muscles. To test CPK, blood is drawn from a vein in your arm
+
+In the hospital, a person’s CK-MB level is often checked when they exhibit signs of heart attack. However, in lupus treatment, an elevated CPK may suggest muscle inflammation due to disease activity or an overlapping condition. CPK levels can also be high after strenuous exercise, so your doctor may wish to recheck your CPK after several days of rest. 
+
+If your CPK is high with no exercise or remains high with rest, your doctor may order additional tests to determine which type (isoenzyme) of CPK is elevated. This information will help her/him to determine the source of the damage (skeletal muscles, heart, or brain). Certain medications, such as statins, can cause increases in CPK, so be sure to tell your doctor about any medications you currently take.
+
+Considering the dataset:
+
+- Levels of Creatinine Phosphokinase (in all subjects) range from 23.0 - 7861.0 (mcg/L) with mean 581.8 and median 250.0
+- Mean values of Creatinine Phosphokinase level are 540.05 mcg/L for non-death events and 670.2 mcg/L for death events
+- When level of Creatinine Phosphokinase level > 3500 mcg/L, the chances of death are at least 50%.
+
+
+```{r, include=TRUE, echo=FALSE}
+#Let's display it
+cp_stat %>% knitr::kable() %>% kable_styling(full_width = FALSE, position = "center", latex_options = "HOLD_position")
+
+#Plot the density distribution of creatinine Phosphokinase for non Death and for death events.
+ggplot(heartfailure.dat,aes(x = creatinine_phosphokinase,fill = as.factor(DEATH_EVENT)))+
+  geom_density(alpha = 0.2) + theme_classic() + 
+  labs(title = "Density Distribution of Creatinine Phosphokinase") + 
+  geom_vline(aes(xintercept = mean(creatinine_phosphokinase[DEATH_EVENT == 0])), color = "darkred")+
+  geom_vline(aes(xintercept = mean(creatinine_phosphokinase[DEATH_EVENT==1])), color = "darkblue") +
+  geom_curve(xend = 540, yend = 0.0009, x = 2000, y = 0.0012, arrow = arrow(length = unit(0.2,"cm")),size = 1,color = "darkred")+
+  geom_curve(xend = 670, yend = 0.0013, x = 2400, y = 0.0015, arrow = arrow(length = unit(0.2,"cm")),size = 1, color = "darkblue")+
+  geom_text(label = paste0("Mean value for Non-Death Events"), x = 2500, y = 0.00124,size = 2.5)+
+  geom_text(label = "Mean value for Death Event", x = 2700, y = 0.00156,size = 2.5) + 
+  annotate("text",x = 5500, y = 0.0005, label = "Mean Creatinine Phosphokinase (mcg/L) \n For Non-Death Events: 540 \n For Death Events: 670")
+```
+
+\newpage
+
+#### Ejection Fraction trend  
+
+Ejection fraction is a measurement of the percentage of blood leaving your heart each time it squeezes (contracts). It is just one of many tests your doctor may use to determine how your heart works.
+
+The heart contracts and relaxes. When your heart contracts, it pumps out (ejects) blood from the two lower chambers (ventricles). When your heart relaxes, the ventricles refill with blood. No matter how forceful the contraction, the heart can never pump all blood out of a ventricle. The term "ejection fraction" refers to the percentage of blood that's pumped out of a filled ventricle with each heartbeat.
+
+The ejection fraction is usually measured only in the left ventricle. The left ventricle is the heart's main pumping chamber. It pumps oxygen-rich blood up into your body's main artery (aorta) to the rest of the body.
+
+A normal ejection fraction is about 50% to 75%, according to the American Heart Association.
+A borderline ejection fraction can range between 41% and 50%.
+
+Even if you have a normal ejection fraction, your overall heart function may not be normal. Talk with your doctor if you have concerns about your heart.
+
+Some things that may cause a reduced ejection fraction are:
+
+- Weakness of the heart muscle, such as cardiomyopathy
+- Heart attack that damaged the heart muscle
+- Heart valve problems
+- Long-term, uncontrolled high blood pressure.
+
+Death events usually corresponds to low values of Ejection Fraction; infact the mean values of Ejection Fracition are 40.3% for non-death events and 33.5% for death events.
+
+
+```{r, include=TRUE, echo=FALSE}
+#Plot the density distribution of ejection fraction for non Death and for death events.
+ggplot(heartfailure.dat,aes(x = ejection_fraction,fill = as.factor(DEATH_EVENT)))+
+  geom_density(alpha = 0.2) + theme_classic() + 
+  labs(title = "Density Distribution of Ejection fraction") + 
+  geom_vline(aes(xintercept = mean(ejection_fraction[DEATH_EVENT == 0])), color = "darkred")+
+  geom_vline(aes(xintercept = mean(ejection_fraction[DEATH_EVENT==1])), color = "darkblue") + 
+  geom_curve(xend = 40.4, yend = 0.03, x = 48, y = 0.03, arrow = arrow(length = unit(0.2,"cm")),size = 1,color = "darkred")+
+  geom_curve(xend = 33.6, yend = 0.04, x = 45, y = 0.042, arrow = arrow(length = unit(0.2,"cm")),size = 1, color = "darkblue")+
+  geom_text(label = paste0("Mean value for Non-Death Events"), x = 60, y = 0.03,size = 2.5)+
+  geom_text(label = "Mean value for Death Event", x = 55, y = 0.042,size = 2.5) + 
+  annotate("text",x = 70, y = 0.05, label = "Mean EF \n Non-Death Events: 40.3 \n Death Events: 33.5") +
+  geom_vline(xintercept = 50, linetype = "dashed")
+```
+
+\newpage
+
+#### Platelets trend  
+
+Platelets are specialized disk-shaped cells in the blood stream that are involved in the formation of blood clots that play an important role in heart attacks, strokes, and peripheral vascular disease. 
+
+In most people, the more than 200 million platelets in a milliliter of blood act as tiny building blocks to form the basis of a clot to stop bleeding from cuts or injuries. Platelets can detect a disruption in the lining of a blood vessel and react to build a wall to stop bleeding 
+
+In cardiovascular disease, abnormal clotting occurs that can result in heart attacks or stroke. Blood vessels injured by smoking, cholesterol, or high blood pressure develop cholesterol-rich build- ups (plaques) that line the blood vessel; these plaques can rupture and cause the platelets to form a clot. 
+
+Even though no bleeding is occurring, platelets sense the plaque rupture and are confused, think- ing that an injury has taken place that will cause bleeding. Instead of sealing the vessel to prevent bleeding as would occur with a cut, a clot forms in an intact blood vessel, causing a blockage of blood flow.
+
+A normal platelet count ranges from 150,000 to 450,000 platelets per microliter of blood.
+
+Mean values of Platelets counts are 266657 for non-death events and 256381 for death events
+As visible in the plot, the distributions of Platelets count in the absence or presence of death events are similar.
+
+
+```{r, include=TRUE, echo=FALSE}
+#Plot the density distribution of platelets for non Death and for death events.
+ggplot(heartfailure.dat,aes(x = platelets,fill = as.factor(DEATH_EVENT)))+
+  geom_density(alpha = 0.2) + theme_classic() + 
+  labs(title = "Density Distribution of Platelets") + 
+  geom_vline(xintercept = 150000, linetype = "dashed") + 
+  geom_vline(xintercept = 450000, linetype = "dashed") + 
+  annotate("text",x = 350000, y = 0.000006, label = "Normal", color  = "darkgreen")
+```
+\newpage
+
+#### Serum Creatinine trend  
+
+A serum creatinine test measures the level of creatinine in your blood and provides an estimate of how well your kidneys filter (glomerular filtration rate). The normal range for creatinine in the blood may be 0.84 to 1.21 mg/dL
+
+Level of Serum Creatinine (in all subjects) range from 0.5 to 9.4 mg/dL, with mean 1.394 and median 1.1
+Mean values of Serum Creatinine (mg/dL) are 1.18 for non-death events and 1.84 for death events
+When serum creatinine levels are greater than 2.5, chances of death > 60%.
+
+
+```{r, include=FALSE, echo=FALSE}
+#Set the Serum Creatinine intervals
+scbreaks <- c(0,0.8,1.2,1.5,2,2.5,3,50)
+sclabels <- c("<0.8","0.8-1.19","1.2-1.49","1.5-1.99","2.0-2.49","2.5-2.99","3+")
+
+setDT(heartfailure.dat)[ ,scgroups := cut(serum_creatinine, 
+                                          breaks = scbreaks, 
+                                          right = FALSE, 
+                                          labels = sclabels)]
+
+sc_all = heartfailure.dat %>% group_by(scgroups) %>% count() %>% pull(n)
+sc_1 = heartfailure.dat %>% filter(DEATH_EVENT==1) %>% group_by(scgroups) %>% count() %>% pull(n)
+
+sc_stat = cbind(sclabels,sc_all,sc_1,round(sc_1/sc_all*100,1))
+
+colnames(sc_stat) = c("SC Range", "No. of Patients", 
+                      "No. of Deceased Patients",
+                      "Percentage of patients who deceased (%)")
+```
+
+```{r, include=TRUE, echo=FALSE}
+#Let's display it
+sc_stat%>% knitr::kable() %>% kable_styling(full_width = FALSE, position = "center", latex_options = "HOLD_position")
+
+#Plot the density distribution of Serum Creatinine for non Death and for death events.
+ggplot(heartfailure.dat,aes(x = serum_creatinine,fill = as.factor(DEATH_EVENT)))+
+  geom_density(alpha = 0.2) + theme_classic() + 
+  labs(title = "Density Distribution of Serum Creatinine") +
+  geom_vline(aes(xintercept = mean(serum_creatinine[DEATH_EVENT == 0])), color = "darkred")+
+  geom_vline(aes(xintercept = mean(serum_creatinine[DEATH_EVENT==1])), color = "darkblue") + 
+  geom_curve(xend = 1.2, yend = 1.15, x = 2.5, y =1.2, arrow = arrow(length = unit(0.2,"cm")),size = 1,color = "darkred")+
+  geom_curve(xend = 1.9, yend = 0.8, x = 2.5, y = 0.8, arrow = arrow(length = unit(0.2,"cm")),size = 1, color = "darkblue")+
+  geom_text(label = paste0("Mean value for Non-Death Events"), x = 4.2, y = 1.2,size = 2.5)+
+  geom_text(label = "Mean value for Death Event", x = 3.9, y = 0.8,size = 2.5) +
+  annotate("text",x = 5, y = 0.3, label = "Mean SC \n Non-Death Events: 1.18 \n Death Events: 1.84")
+```
+\newpage
+
+#### Serum Sodium trend  
+
+A sodium blood test is a routine test that allows the doctors to see how much sodium is present in the blood. It’s also called a serum sodium test. Sodium is an essential mineral to the body. It’s also referred to as Na+.
+
+Sodium is particularly important for nerve and muscle function. The body keeps sodium in balance through a variety of mechanisms. Sodium gets into the blood through food and drink. It leaves the blood through urine, stool, and swea. Too much sodium can raise the blood pressure resulting, in the long term, in heart fatigue/failure.
+
+A normal blood sodium level is between 135 and 145 milliequivalents per liter (mEq/L). A serum sodium concentration of <135 mEq/L and is one of the most common biochemical disorders featured in heart failure patients.
+
+- Level of Serum Sodium (in all subjects) range from 113.0 to 148.0 mEq/L, with mean 136.6 and median 137.0
+- Mean values of Serum Sodium (mEq/L) are 137.2 for non-death events and 135.4 for death events.
+
+
+```{r, include=TRUE, echo=FALSE}
+#Plot the density distribution of Serum Sodium for non Death and for death events.
+ggplot(heartfailure.dat,aes(x = serum_sodium,fill = as.factor(DEATH_EVENT)))+
+  geom_density(alpha = 0.2) + theme_classic() + 
+  labs(title = "Density Distribution of Serum Sodium") +
+  geom_vline(aes(xintercept = mean(serum_sodium[DEATH_EVENT == 0])), color = "darkred")+
+  geom_vline(aes(xintercept = mean(serum_sodium[DEATH_EVENT==1])), color = "darkblue") +
+  geom_curve(xend = 137, yend = 0.12, x = 131, y =0.11, arrow = arrow(length = unit(0.2,"cm")),size = 1,color = "darkred")+
+  geom_curve(xend = 135, yend = 0.08, x = 130, y = 0.08, arrow = arrow(length = unit(0.2,"cm")),size = 1, color = "darkblue")+
+  geom_text(label = paste0("Mean value for Non-Death Events"), x = 124, y = 0.11,size = 2.5)+
+  geom_text(label = "Mean value for Death Event", x = 125, y = 0.082,size = 2.5) +
+  annotate("text",x = 120, y = 0.03, label = "Mean SS \n Non-Death Events: 137 \n Death Events: 135")
+```
+
+\newpage
+
+#### Time trend 
+
+The data stored in the time column represent the follow-up period expressed in days. 
+
+It is logical to assume that, considering the average age of the patients in the sample under analysis, the longer the follow-up time, the greater the possibility that a death event will be required.
+
+It is not trivial and somewhat surprising to justify a second peak in patients who died at relatively short "time" values.
+
+```{r, include=TRUE, echo=FALSE}
+#Plot the density distribution of time for non Death and for death events.
+ggplot(heartfailure.dat,aes(x = time,fill = as.factor(DEATH_EVENT)))+
+  geom_density(alpha = 0.2) + theme_classic() + 
+  labs(title = "Density Distribution of Time")
+```
+
+
+\newpage
+
+In the dataframe there are "Boolean data" which means that they are data whose value can be 0 or 1 which can be interpreted, if you prefer, as False or True or vice versa. 
+
+In particular in the following plots we will have the following conditions (previosuly presented and reported here for completeness):
+
+- Anaemia --> absence (0) presence (1)
+- Diabetes --> absence (0) presence (1)
+- High Blood Presure - HBP --> absence (0) presence (1)
+- Sex --> female (0) male (1)
+- Smoking addiction --> absence (0) presence (1).
+
+It will be clearly notable that a higher proportion of patients who died had Anemia, Diabetes and High Blood Pressure.
+
+#### Anaemia Effect  
+
+Anaemia is a decrease in the total amount of red blood cells (RBCs) or hemoglobin in the blood or a lowered ability of the blood to carry oxygen.
+
+Anemia associated with heart failure is a frequent condition, which may lead to heart function deterioration by the activation of neuro-hormonal mechanisms. Therefore, a vicious circle is present in the relationship of heart failure and anemia. The consequence is reflected upon the patients' survival, quality of life, and hospital readmissions.
+
+
+```{r, include=TRUE, echo=FALSE}
+#The plots below are related to "binary values" so I have used histograms to visualize the effect of each factor on both death and non-death events.
+ggplot(heartfailure.dat, aes(x = as.factor(DEATH_EVENT), fill = as.factor(anaemia))) + geom_bar(position = "identity", alpha=0.8) +
+  theme_classic()+ scale_x_discrete(labels  = c("Death Event:No","Death Event:Yes")) + labs(subtitle = "Anemia") +
+  scale_fill_manual(values = c("grey","skyblue"), name = "Anaemia",labels = c("No","Yes"))
+```
+
+\newpage
+
+#### Diabetes Effect  
+
+Diabetes usually refers to diabetes mellitus, a group of metabolic diseases in which a person has high blood glucose levels over a prolonged period.
+
+Over time, high blood sugar can damage blood vessels and the nerves that control your heart. People with diabetes are also more likely to have other conditions that raise the risk for heart disease:
+
+- Too much LDL (“bad”) cholesterol in your bloodstream can form plaque on damaged artery walls.
+- High triglycerides (a type of fat in your blood) and low HDL (“good”) cholesterol or high LDL cholesterol is thought to contribute to hardening of the arteries.
+
+
+```{r, include=TRUE, echo=FALSE}
+ggplot(heartfailure.dat, aes(x = as.factor(DEATH_EVENT), fill = as.factor(diabetes))) + geom_bar(position = "identity", alpha=0.8) +
+  theme_classic()+ scale_x_discrete(labels  = c("Death Event:No","Death Event:Yes")) + labs(subtitle = "Diabetes") +
+  scale_fill_manual(values = c("grey","skyblue"), name = "Diabetes",labels = c("No","Yes"))
+```
+
+\newpage
+
+#### High Blood Pressure Effect
+
+High blood pressure (also referred to as HBP, or hypertension) is when your blood pressure, the force of blood flowing through your blood vessels, is consistently too high.  
+
+Your blood pressure changes throughout the day based on your activities. Having blood pressure measures consistently above normal may result in a diagnosis of high blood pressure (or hypertension).
+
+The higher your blood pressure levels, the more risk you have for other health problems, such as heart disease, heart attack, and stroke.
+
+```{r, include=TRUE, echo=FALSE}
+ggplot(heartfailure.dat, aes(x = as.factor(DEATH_EVENT), fill = as.factor(high_blood_pressure))) + geom_bar(position = "identity", alpha=0.8) +
+  theme_classic()+ scale_x_discrete(labels  = c("Death Event:No","Death Event:Yes")) + labs(subtitle = "High BP") +
+  scale_fill_manual(values = c("grey","skyblue"), name = "High BP",labels = c("No","Yes"))
+```
+
+\newpage
+
+#### Sex Effect
+Due to differences in the cardiovascular system, HF affects men and women in different ways. Currently, the mechanisms underlying these gender related differences remain unresolved, however research is underway to discover their root causes. 
+
+However the data collected in this dataframe do not show a considerable difference between men and women.
+
+```{r, include=TRUE, echo=FALSE}
+ggplot(heartfailure.dat, aes(x = as.factor(DEATH_EVENT), fill = as.factor(sex))) + geom_bar(position = "identity", alpha=0.8) +
+  theme_classic()+ scale_x_discrete(labels  = c("Death Event:No","Death Event:Yes")) + labs(subtitle = "Sex") +
+  scale_fill_manual(values = c("grey","skyblue"), name = "Sex",labels = c("Female","Male"))
+```
+
+\newpage
+
+#### Smoking Effect
+
+Cigarette smoking is the chief cause of preventable disease and death in the United States and can harm nearly any part of the body. 
+
+Cigarette smoke is a toxic mix of more than 7,000 chemicals1 and, when inhaled, can interfere with important processes in the body that keep it functioning normally. One of these processes is the delivery of oxygen-rich blood to your heart and the rest of your body.
+
+When you breathe in air from the atmosphere, the lungs take in oxygen and deliver it to the heart, which pumps this oxygen-rich blood to the rest of the body through the blood vessels. 
+
+But when you breathe in cigarette smoke, the blood that is distributed to the rest of the body becomes contaminated with the smoke’s chemicals. These chemicals can damage to your heart and blood vessels, which can lead to cardiovascular disease.
+
+```{r, include=TRUE, echo=FALSE}
+ggplot(heartfailure.dat, aes(x = as.factor(DEATH_EVENT), fill = as.factor(smoking))) + geom_bar(position = "identity", alpha=0.8) +
+  theme_classic()+ scale_x_discrete(labels  = c("Death Event:No","Death Event:Yes")) + labs(subtitle = "Smoking") +
+  scale_fill_manual(values = c("grey","skyblue"), name = "Smoking",labels = c("No","Yes"))
+
+```
+
+\newpage
+
+## Conclusion on the Exploratory Analysis 
+As a concluding remark for this first part of the report below are presented the key information obtained from the analysis of the data in the dataset.
+
+- As the age of a patient increases, the probabilty of death event increases noticeably.
+- When level of Creatinine Phosphokinase level > 3500 mcg/L, the chances of death are at least 50%.
+- Death events usually corresponds to low values of Ejection Fraction.
+- The contibution of platelets seems negligible or at least there are no differences between surviving and dead patients on this data.
+- When serum creatinine levels are greater than 2.5, chances of death > 60%.
+- Serum Sodium (mEq/L) contribute seems negligible or at least there are no evident differences between surviving and dead patients on this data.
+- Time seems to be a key factor.
+- Smoking does not seems to have a huge impact as the most would have expected
+- higher proportion of patients who died had anemia, diabetes and high blood pressure.
+
+
+\newpage 
+
+# Machine Learning Models
+## Data pre-processing for the Machine Learning Analysis
+
+Let's start subdividing the dataset into the training and test dataset: 
+
+```{r, include=TRUE, echo=TRUE}
+
+# STEEP 4: MACHINE LEARNING MODELS
+
+### Preparing the DATA for ML analysis 
+set.seed(999)
+trainIndex = sample(1:length(heartfailure.dat$DEATH_EVENT),0.8*length(heartfailure.dat$DEATH_EVENT))
+train = heartfailure.dat[trainIndex,-c(14:16)]
+test.x = heartfailure.dat[-trainIndex,-c(13:16)]
+test.y = heartfailure.dat[-trainIndex,13]
+
+```
+
+The test set will be populated by the 20% of the patient of the initial dataset; as a consequence the train set will be composed by the remaninign 80% of the patients.
+
+\newpage
+
+## Logistic Regression
+
+The first machine learning model used to build the prediction system which can predict survival of patients with heart failure is ```<Logistic Regression>```. 
+
+Logistic regression is a supervised learning classification algorithm used to predict the probability of a target variable. The nature of target or dependent variable is dichotomous, which means there would be only two possible classes.
+
+In simple words, the dependent variable is binary in nature having data coded as either 1 (stands for success/yes) or 0 (stands for failure/no).
+
+Mathematically, a logistic regression model predicts P(Y=1) as a function of X. It is one of the simplest ML algorithms that can be used for various classification problems such as spam detection, Diabetes prediction, cancer detection etc.
+
+Generally, logistic regression means binary logistic regression having binary target variables, but there can be two more categories of target variables that can be predicted by it. Based on those number of categories, Logistic regression can be divided into different types such as Binomial, Multinomial and Ordinal.
+
+In this situation, the dependent variable will have only two possible types either 1 and 0.
+
+The confusion matrix togethere with the results of the logistic regression model are printed below:
+
+```{r, include=FALSE, echo=FALSE}
+logistic.fit = glm(DEATH_EVENT ~ ., data = train, family = "binomial")
+summary(logistic.fit)
+
+logistic.predict = predict(logistic.fit, newdata = test.x, type = "response")
+
+logistic.predict = ifelse(logistic.predict > 0.5,1,0)
+
+table(test.y$DEATH_EVENT,logistic.predict) 
+```
+
+```{r, include=TRUE, echo=FALSE}
+confusionMatrix(as.factor(logistic.predict), test.y$DEATH_EVENT)
+```
+
+```{r, include=TRUE, echo=FALSE}
+print(paste0("Accuracy of Logistic Regression is"," ", round(confusionMatrix(as.factor(logistic.predict), as.factor(test.y$DEATH_EVENT))$overall[1],2)))
+```
+
+
+```{r, include=TRUE, echo=FALSE}
+ML_results <- data_frame(Method = "Logistic Regression", Accuracy =round(confusionMatrix(as.factor(logistic.predict), as.factor(test.y$DEATH_EVENT))$overall[1],2))
+
+ML_results %>% knitr::kable()  %>% kable_styling(full_width = FALSE, position = "center", latex_options = "HOLD_position")
+
+```
+
+## Random Forest
+
+The second machine learning model used is the ```<Random Forest>```. 
+
+Random Forest is a powerful and versatile supervised machine learning algorithm that grows and combines multiple decision trees to create a “forest.” It can be used for both classification and regression problems in R and Python.
+
+A decision tree is another type of algorithm used to classify data. In very simple terms, it can be think as s flowchart that draws a clear pathway to a decision or outcome; it starts at a single point and then branches off into two or more directions, with each branch of the decision tree offering different possible outcomes.
+
+The mtry value has been set to the square root of the number of columns in the dataframe as suggested by the theory.
+
+```{r, include=TRUE, echo=FALSE}
+#Create model with default parameters
+control <- trainControl(method ="repeatedcv", number=10, repeats=3)
+metric <- "Accuracy"
+set.seed(999)
+# According to theory the mtry value should be the sqrt of ncol
+mtry <- sqrt(ncol(heartfailure.dat))
+tunegrid <- expand.grid(.mtry=mtry)
+rf_default <- train(DEATH_EVENT ~ ., data = train, method="rf", metric=metric, tuneGrid=tunegrid, trControl=control)
+print(rf_default)
+```
+
+### Tuning using Caret Package
+
+The parameters that affect the random forest model are several and it is important to try to tune them in order to avoid overfitting or others possible mistakes in the model output.
+
+The key parameters that most likely have the biggest effect on the final accuracy are the ```<mtry>``` and the ```<ntree>```.
+
+Direct from the help page for the randomForest() function in R:
+
+- ```<mtry>```: Number of variables randomly sampled as candidates at each split.
+- ```<ntree>```: Number of trees to grow.
+
+The caret package in R provides an excellent facility to tune machine learning algorithm parameters.
+
+However only mtry parameter is available in caret for tuning. The reason is its effect on the final accuracy and that it must be found empirically for a dataset.
+
+The ntree parameter is different in that it can be as large as you like, and continues to increases the accuracy up to some point. It is less difficult or critical to tune and could be limited more by compute time available more than anything.
+
+#### Random Forest model with random search for mtry 
+
+One search strategy that can be used is to try random values within a range.
+
+This can be good if there is uncertnaities of what the value might be and it is wanted to overcome any biases it might be for setting the parameter.
+
+```{r, include=TRUE, echo=FALSE}
+#Random Search
+control <- trainControl(method ="repeatedcv", number=10, repeats=3, search = "random")
+set.seed(999)
+mtry <- sqrt(ncol(heartfailure.dat))
+rf_random <- train(DEATH_EVENT ~ ., data = train, method="rf", metric=metric, tuneLength=15, trControl=control)
+print(rf_random)
+plot(rf_random)
+```
+
+#### Random Forest model with grid search for mtry 
+
+Another search is to define a grid of algorithm parameters to try.
+
+Each axis of the grid is an algorithm parameter, and points in the grid are specific combinations of parameters. Since in this case only one parameter has been tuned, the grid search is a linear search through a vector of candidate values.
+
+```{r, include=TRUE, echo=FALSE}
+#Grid search
+control <- trainControl(method="repeatedcv", number=10, repeats=3, search = "grid")
+set.seed(999)
+tunegrid <- expand.grid(.mtry=c(1:30))
+rf_gridsearch <- train(DEATH_EVENT ~ ., data = train, method="rf", metric=metric, tuneGrid=tunegrid, trControl=control)
+print(rf_gridsearch)
+plot(rf_gridsearch)
+```
+
+#### Random Forest model with auto-tuning of parameters
+
+The random forest model has been also tuned with the caret fucntion tuneRF. 
+
+This function, starting with the default value of mtry, search for the optimal value (with respect to Out-of-Bag error estimate) of mtry for randomForest.
+
+```{r, include=TRUE, echo=FALSE}
+# Algorithm Tune (tuneRF)
+set.seed(999)
+bestmtry <- tuneRF(x = train[,-13], y = train$DEATH_EVENT, stepFactor=1.5, improve=1e-5, ntree=500)
+print(bestmtry)
+```
+
+### Tuning results
+
+In the table below are reporte the value of mtry suggested by the tuning models.
+```{r, include=TRUE, echo=FALSE}
+Tuning_res <- data_frame (Method = "Random Search", mtry = 5)
+Tuning_res <- Tuning_res %>% add_row( Method = "Grid Search", mtry = 5)
+Tuning_res <- Tuning_res %>% add_row( Method = "TuneRF", mtry = 4)
+
+Tuning_res %>% knitr::kable()  %>% kable_styling(full_width = FALSE, position = "center", latex_options = "HOLD_position")
+
+```
+### Random Forest Model's results
+
+For the sake of completeness, the results relating to the Random Forest models built on the 4 different tuning methods are presented below.
+
+The improvement in the accuracy of the model compared to the Logistic Regression model is evident and significant. 
+```{r, include=FALSE, echo=FALSE}
+rF.fit_default = randomForest(DEATH_EVENT ~ ., data = train, 
+                             trControl = trainControl(method = "cv", 
+                             number = 10,returnResamp = "all", 
+                             classProbs = TRUE, summaryFunction = twoClassSummary),
+                             ntree = 1000, mtry = 4 , importance=TRUE)
+
+rF.fit_random = randomForest(DEATH_EVENT ~ ., data = train, 
+                             trControl = trainControl(method = "cv", 
+                             number = 10,returnResamp = "all", 
+                             classProbs = TRUE, summaryFunction = twoClassSummary),
+                             ntree = 1000, mtry = 5 , importance=TRUE)
+
+rF.fit_grid = randomForest(DEATH_EVENT ~ ., data = train, 
+                             trControl = trainControl(method = "cv", 
+                             number = 10,returnResamp = "all", 
+                             classProbs = TRUE, summaryFunction = twoClassSummary),
+                             ntree = 1000, mtry = 5 , importance=TRUE)
+
+rF.fit_tune = randomForest(DEATH_EVENT ~ ., data = train, 
+                             trControl = trainControl(method = "cv", 
+                             number = 10,returnResamp = "all", 
+                             classProbs = TRUE, summaryFunction = twoClassSummary),
+                             ntree = 1000, mtry = 4 , importance=TRUE)
+```
+
+```{r, include=FALSE, echo=FALSE}
+rF.predict_default = predict(rF.fit_default, test.x)
+rF.predict_random = predict(rF.fit_random, test.x)
+rF.predict_grid = predict(rF.fit_grid, test.x)
+rF.predict_tune = predict(rF.fit_tune, test.x)
+
+table(test.y$DEATH_EVENT,rF.predict_default)
+table(test.y$DEATH_EVENT,rF.predict_random)
+table(test.y$DEATH_EVENT,rF.predict_grid)
+table(test.y$DEATH_EVENT,rF.predict_tune)
+```
+
+```{r, include=TRUE, echo=FALSE}
+print(paste0("Accuracy of Random Forest with default parameters is"," ", round(confusionMatrix(as.factor(rF.predict_default), test.y$DEATH_EVENT)$overall[1],2)))
+print(paste0("Accuracy of Random Forest with random parameters is"," ", round(confusionMatrix(as.factor(rF.predict_random), test.y$DEATH_EVENT)$overall[1],2)))
+print(paste0("Accuracy of Random Forest with grid-tuned parameters is"," ", round(confusionMatrix(as.factor(rF.predict_grid), test.y$DEATH_EVENT)$overall[1],2)))
+print(paste0("Accuracy of Random Forest with tuned parameters is"," ", round(confusionMatrix(as.factor(rF.predict_tune), test.y$DEATH_EVENT)$overall[1],2)))
+
+ML_results <- ML_results %>% add_row( Method = "Random Forest - Theroretical Parameters", Accuracy = round(confusionMatrix(as.factor(rF.predict_default), test.y$DEATH_EVENT)$overall[1],2))
+
+ML_results <- ML_results %>% add_row( Method = "Random Forest - mtry Random Tuning", Accuracy = round(confusionMatrix(as.factor(rF.predict_random), test.y$DEATH_EVENT)$overall[1],2))
+
+ML_results <- ML_results %>% add_row( Method = "Random Forest - mtry Grid Tuning", Accuracy = round(confusionMatrix(as.factor(rF.predict_grid), test.y$DEATH_EVENT)$overall[1],2))
+
+ML_results <- ML_results %>% add_row( Method = "Random Forest - TuneRF Tuning", Accuracy = 
+round(confusionMatrix(as.factor(rF.predict_tune), test.y$DEATH_EVENT)$overall[1],2))
+
+ML_results %>% knitr::kable()  %>% kable_styling(full_width = FALSE, position = "center", latex_options = "HOLD_position")
+
+```
+
+Below are shown the plots highlighting the feature importance for every Random Forest model tried.
+
+It is interesting that there are no differences between the 4 models in the factors that have a greater influence on the algorithm while there is some difference between those that have a lesser effect.
+
+#### Feature Importance in Random Forest model - Theretical Parameters
+
+```{r, include=TRUE, echo=FALSE}
+imp_def <- importance(rF.fit_default, type=1)
+featureImportance_def <- data.frame(Feature=row.names(imp_def), Importance_def=imp_def[,1])
+
+ggplot(featureImportance_def, aes(x=reorder(Feature, Importance_def), y=Importance_def)) +
+  geom_bar(stat="identity", fill="#00bfc4") +
+  coord_flip() + 
+  theme_minimal(base_size=14) +
+  xlab("") +
+  ylab("Importance_default") + 
+  ggtitle("Random Forest Feature Importance") +
+  theme(plot.title=element_text(size=12))
+```
+
+
+#### Feature Importance in Random Forest model - mtry Random Tuning
+
+```{r, include=TRUE, echo=FALSE}
+imp_ran <- importance(rF.fit_random, type=1)
+featureImportance_ran <- data.frame(Feature=row.names(imp_ran), Importance_ran=imp_ran[,1])
+
+ggplot(featureImportance_ran, aes(x=reorder(Feature, Importance_ran), y=Importance_ran)) +
+  geom_bar(stat="identity", fill="#00bfc4") +
+  coord_flip() + 
+  theme_minimal(base_size=14) +
+  xlab("") +
+  ylab("Importance_Random") + 
+  ggtitle("Random Forest Feature Importance") +
+  theme(plot.title=element_text(size=12))
+```
+
+#### Feature Importance in Random Forest model - mtry Grid Tuning
+
+```{r, include=TRUE, echo=FALSE}
+imp_grid <- importance(rF.fit_random, type=1)
+featureImportance_grid <- data.frame(Feature=row.names(imp_grid), Importance_grid=imp_grid[,1])
+
+ggplot(featureImportance_grid, aes(x=reorder(Feature, Importance_grid), y=Importance_grid)) +
+  geom_bar(stat="identity", fill="#00bfc4") +
+  coord_flip() + 
+  theme_minimal(base_size=14) +
+  xlab("") +
+  ylab("Importance_grid") + 
+  ggtitle("Random Forest Feature Importance") +
+  theme(plot.title=element_text(size=12))
+```
+
+#### Feature Importance in Random Forest model - mtry TuneRF Tuning
+
+```{r, include=TRUE, echo=FALSE}
+imp_tune <- importance(rF.fit_tune, type=1)
+featureImportance_tune <- data.frame(Feature=row.names(imp_tune), Importance_tune=imp_tune[,1])
+
+ggplot(featureImportance_tune, aes(x=reorder(Feature, Importance_tune), y=Importance_tune)) +
+  geom_bar(stat="identity", fill="#00bfc4") +
+  coord_flip() + 
+  theme_minimal(base_size=14) +
+  xlab("") +
+  ylab("Importance_tune") + 
+  ggtitle("Random Forest Feature Importance") +
+  theme(plot.title=element_text(size=12))
+```
+
+#### Error Rate relation with Number of trees
+
+In the plot below are represented the error rate with respect to the number of trees in each Random Forest model developed.
+
+```{r, include=TRUE, echo=FALSE}
+plot(rF.fit_default, main="Random Forest (Error Rate vs. Number of Trees)")
+plot(rF.fit_random, main="Random Forest (Error Rate vs. Number of Trees)")
+plot(rF.fit_grid, main="Random Forest (Error Rate vs. Number of Trees)")
+plot(rF.fit_tune, main="Random Forest (Error Rate vs. Number of Trees)")
+
+train.x = train[,-13]
+train.y = train[,13] 
+```
+
+## XGBoost
+
+The third Machine Learning model implemented to improve more the accuracy of the prediction system is the ```<Extreme Gradient Boost - XGB>```.
+
+XGBoost is an optimized distributed gradient boosting library designed to be highly efficient, flexible and portable. It implements Machine Learning algorithms under the Gradient Boosting framework. It provides a parallel tree boosting to solve many data science problems in a fast and accurate way. 
+
+Boosting is an ensemble learning technique to build a strong classifier from several weak classifiers in series. Boosting algorithms play a crucial role in dealing with bias-variance trade-off. Unlike bagging algorithms, which only controls for high variance in a model, boosting controls both the aspects (bias & variance) and is considered to be more effective.
+
+The key parameters which affect the most the results of the XGBoost models are the following:
+
+- ```<eta>```: is the learning rate. Step size shrinkage used in update to prevents overfitting. After each boosting step, we can directly get the weights of new features, and eta shrinks the feature weights to make the boosting process more conservative.
+- ```<subsample>```: is subsample ratio of the training instances. Setting it to 0.5 means that XGBoost would randomly sample half of the training data prior to growing trees. and this will prevent overfitting. Subsampling will occur once in every boosting iteration.
+- ```<max_depth>```: is the maximum depth of a tree. Increasing this value will make the model more complex and more likely to overfit.
+- ```<colsample_bytree>```: is the subsample ratio of columns when constructing each tree. Subsampling occurs once for every tree constructed.
+
+To achieve better accuracy these 4 key parameters were tuned by selecting the combination that led to the best result.
+
+The best combination of these parameters was found among the following values:
+```{r, include=FALSE, echo=FALSE}
+# XGBoost
+# Convert data to xgboost format
+train.xgb <- xgb.DMatrix(data = data.matrix(train.x), label = as.character(train.y$DEATH_EVENT))
+test.xgb <- xgb.DMatrix(data = data.matrix(test.x), label = test.y$DEATH_EVENT)
+
+# I want to find the best tuning parameter for the XGboost model 
+# Usually the key parameters are the following
+eta <- c(0.01, 0.02, 0.04, 0.06, 0.08, 0.1)
+subsample <- c(0.5, 0.6, 0.7, 0.8, 0.9, 1)
+max_depth <- c(3, 4, 5, 6, 7, 8, 9, 10)
+colsample_bytree <- c(0.5, 0.6, 0.7, 0.8, 0.9, 1)
+
+# I will create a cycle for which will test all the possible combinations and it will then return the best one.
+mat <- expand.grid(eta, subsample, max_depth, colsample_bytree)
+mat
+
+pred <- matrix(nrow = NROW(mat), ncol = 1)
+```
+
+```{r, include=TRUE, echo=FALSE}
+
+Tuningframe <- data_frame(Parameter = "Eta", Initial_Value =0.01, Final_Value =0.1, Increment = 0.01)
+
+Tuningframe <- Tuningframe %>% add_row(Parameter = "SubSample", Initial_Value =0.5, Final_Value =1, Increment = 0.1)
+
+Tuningframe <- Tuningframe %>% add_row(Parameter = "Max Depth", Initial_Value =3, Final_Value =10, Increment = 1)
+
+Tuningframe <- Tuningframe %>% add_row(Parameter = "Colsamle by tree", Initial_Value =0.5, Final_Value =1, Increment = 0.1)
+
+Tuningframe %>% knitr::kable()  %>% kable_styling(full_width = FALSE, position = "center", latex_options = "HOLD_position")
+
+```
+
+For completeness, the code of the for loop used to find the best combiantion is shown below
+
+```{r, include=TRUE, echo=TRUE}
+for (i in 1:NROW(mat)) {
+  params <- list (eta = mat[i,1],
+                  max_depth = mat[i,3],
+                  min_child_weight = 2,
+                  subsample = mat[i,2],
+                  colsample_bytree = mat[i,4],
+                  objective = "binary:logistic",
+                  eval_metric = "rmse")
+  
+  xgb.model = xgb.train(params, train.xgb, nround = 10)
+  xgb.predict <- predict(xgb.model, test.xgb)
+  xgb.predict = ifelse(xgb.predict<0.5,0,1)
+  table(test.y$DEATH_EVENT, xgb.predict)
+  
+  pred[i,1] = confusionMatrix(as.factor(xgb.predict),test.y$DEATH_EVENT)$overall[1]
+  updatedmat <- cbind(mat, pred)
+}
+```
+
+
+```{r, include=FALSE, echo=FALSE}
+colnames(updatedmat) <- c("Eta", "subsample", "max_depth", "colsample_bytree", "Accuracy")
+updatedmat
+Best <- which.max(updatedmat[,5])
+Best
+
+
+# I will make again the calculation with the best set of parameters
+bestpar <- list (eta = mat[Best,1],
+                 max_depth = mat[Best,3],
+                 min_child_weight = 2,
+                 subsample = mat[Best,2],
+                 colsample_bytree = mat[Best,4],
+                 objective = "binary:logistic",
+                 eval_metric = "rmse")
+```
+
+The tuned parameters which led to the best accuracy for the XGboost Model are the following:
+
+```{r, include=FALSE, echo=FALSE}
+xgb.model = xgb.train(bestpar, train.xgb, nround = 10)
+xgb.predict <- predict(xgb.model, test.xgb)
+xgb.predict = ifelse(xgb.predict<0.5,0,1)
+table(test.y$DEATH_EVENT, xgb.predict)
+```
+
+```{r, include=FALSE, echo=FALSE}
+print(paste0("Accuracy of XGboost with the following tuning parameters: 
+             eta " , mat[Best,1], 
+             " - subsample " , mat[Best,2], 
+             " - max depth " , mat[Best,3], 
+             " - colsample by tree " , mat[Best,4], "  is ", 
+             updatedmat[Best,5], " "))
+```
+
+```{r, include=TRUE, echo=FALSE}
+BestParamaeters <- data_frame(Parameter = "Eta", Tuned_Value =mat[Best,1])
+
+BestParamaeters <- BestParamaeters %>% add_row(Parameter = "SubSample", Tuned_Value =mat[Best,2])
+
+BestParamaeters <- BestParamaeters %>% add_row(Parameter = "Max Depth", Tuned_Value =mat[Best,3])
+
+BestParamaeters <- BestParamaeters %>% add_row(Parameter = "Colsample by Tree", Tuned_Value =mat[Best,4])
+
+BestParamaeters %>% knitr::kable()  %>% kable_styling(full_width = FALSE, position = "center", latex_options = "HOLD_position")
+
+```
+
+The Accuracy reached with the tuned XGBoost model is:
+```{r, include=TRUE, echo=FALSE}
+AccXGBoost <- data_frame (Parameter = "Tuned XGBoost",  Accuracy = updatedmat[Best,5])
+
+AccXGBoost %>% knitr::kable()  %>% kable_styling(full_width = FALSE, position = "center", latex_options = "HOLD_position")
+```
+
+\newpage
+
+# Conclusions and Results
+
+The results obtained with the Machine Learning model developed are listed below. 
+
+```{r, include=TRUE, echo=FALSE}
+ML_results <- ML_results %>% add_row( Method = "Tuned XGBoost", Accuracy = 
+updatedmat[Best,5])
+
+ML_results %>% knitr::kable()  %>% kable_styling(full_width = FALSE, position = "center", latex_options = "HOLD_position")
+```
+
+The Tuned XGBoost model has evidenced an increment in the accuracy of 10% which is a considerable result. It could be interesting to try to change the number of trees in the Random forest algorithm to check if better results can be obtained.
+
+The variable time has a considerable effect on the model; it could be also interesting to repeat the analysis discarding the time variable from the dataset.
+
+As a conclusion I would like to express my opinion on the importance of machine learning applied to medicine. 
+
+This rreport and the work on this dataset is just a very small and trivial proof of how machine learning techniques are a support tool for medical activities of fundamental importance.
+
+In my opinion, over time, the use of machine learning algorithms will become crucial in all medical sectors; from diagnostics to therapy to conclude with surgical intervention.
